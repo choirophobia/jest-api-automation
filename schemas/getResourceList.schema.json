@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GetResourceListResponse",
+  "type": "object",
+  "properties": {
+    "page": { "type": "integer" },
+    "per_page": { "type": "integer" },
+    "total": { "type": "integer" },
+    "total_pages": { "type": "integer" },
+    "data": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "year": { "type": "integer" },
+          "color": { "type": "string" },
+          "pantone_value": { "type": "string" }
+        },
+        "required": ["id", "name", "year", "color", "pantone_value"],
+        "additionalProperties": false
+      }
+    },
+    "support": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "text": { "type": "string" }
+      },
+      "required": ["url", "text"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["page", "per_page", "total", "total_pages", "data", "support"],
+  "additionalProperties": true
+}

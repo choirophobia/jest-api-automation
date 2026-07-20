@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # 06:00 WIB (UTC+7) every day
+    - cron: '0 23 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -38,3 +42,26 @@ jobs:
           name: Jest Results
           path: reports/junit.xml
           reporter: jest-junit
+
+  notify:
+    needs: test
+    runs-on: ubuntu-latest
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    steps:
+      - name: Build result message
+        id: message
+        run: |
+          if [ "${{ needs.test.result }}" = "success" ]; then
+            echo "emoji=✅" >> "$GITHUB_OUTPUT"
+          else
+            echo "emoji=❌" >> "$GITHUB_OUTPUT"
+          fi
+          echo "run_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+
+      - name: Send Discord notification
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\": \"${{ steps.message.outputs.emoji }} Daily API Tests: **${{ needs.test.result }}**\nRepo: ${{ github.repository }}\nRun: ${{ steps.message.outputs.run_url }}\"}"

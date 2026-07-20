@@ -17,6 +17,10 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    outputs:
+      total: ${{ steps.summary.outputs.total }}
+      passed: ${{ steps.summary.outputs.passed }}
+      failed: ${{ steps.summary.outputs.failed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,25 +47,33 @@ jobs:
           path: reports/junit.xml
           reporter: jest-junit
 
+      - name: Extract test summary
+        id: summary
+        if: always()
+        run: |
+          if [ -f reports/junit.xml ]; then
+            TOTAL=$(grep -oP 'tests="\K[0-9]+' reports/junit.xml | head -1)
+            FAILURES=$(grep -oP 'failures="\K[0-9]+' reports/junit.xml | head -1)
+            ERRORS=$(grep -oP 'errors="\K[0-9]+' reports/junit.xml | head -1)
+          else
+            TOTAL=0; FAILURES=0; ERRORS=0
+          fi
+          FAILED=$((FAILURES + ERRORS))
+          PASSED=$((TOTAL - FAILED))
+          echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
+          echo "passed=$PASSED" >> "$GITHUB_OUTPUT"
+          echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
+
   notify:
     needs: test
     runs-on: ubuntu-latest
     if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     steps:
-      - name: Build result message
-        id: message
-        run: |
-          if [ "${{ needs.test.result }}" = "success" ]; then
-            echo "emoji=✅" >> "$GITHUB_OUTPUT"
-          else
-            echo "emoji=❌" >> "$GITHUB_OUTPUT"
-          fi
-          echo "run_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_OUTPUT"
-
       - name: Send Discord notification
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
+          if [ "${{ needs.test.result }}" = "success" ]; then EMOJI="✅"; else EMOJI="❌"; fi
           curl -s -X POST "$DISCORD_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -d "{\"content\": \"${{ steps.message.outputs.emoji }} Daily API Tests: **${{ needs.test.result }}**\nRepo: ${{ github.repository }}\nRun: ${{ steps.message.outputs.run_url }}\"}"
+            -d "{\"content\": \"${EMOJI} Daily API Tests: **${{ needs.test.result }}**\nTotal: ${{ needs.test.outputs.total }} | Passed: ${{ needs.test.outputs.passed }} | Failed: ${{ needs.test.outputs.failed }}\"}"

@@ -39,12 +39,14 @@ describe('ReqRes API', () => {
       const isValid = validateGetUser(response.data);
       expect(isValid).toBe(true);
       expect(validateGetUser.errors).toBeNull();
+      expect(response.data.data.id).toBe(2);
     });
 
     test('returns 404 for a missing resource', async () => {
       await expect(client.get('/users/9999')).rejects.toMatchObject({
         response: {
           status: 404,
+          data: {},
         },
       });
     });
@@ -53,6 +55,7 @@ describe('ReqRes API', () => {
       await expect(client.get('/users/abc')).rejects.toMatchObject({
         response: {
           status: 404,
+          data: {},
         },
       });
     });
@@ -61,6 +64,7 @@ describe('ReqRes API', () => {
       await expect(client.get('/users/0')).rejects.toMatchObject({
         response: {
           status: 404,
+          data: {},
         },
       });
     });
@@ -69,6 +73,7 @@ describe('ReqRes API', () => {
       await expect(client.get('/users/-1')).rejects.toMatchObject({
         response: {
           status: 404,
+          data: {},
         },
       });
     });
@@ -85,6 +90,9 @@ describe('ReqRes API', () => {
       expect(validateUserList.errors).toBeNull();
       expect(response.data.page).toBe(2);
       expect(response.data.data.length).toBeGreaterThan(0);
+      expect(response.data.total_pages).toBe(
+        Math.ceil(response.data.total / response.data.per_page)
+      );
     });
 
     test('page=0 falls back to page 1 instead of erroring', async () => {
@@ -93,6 +101,7 @@ describe('ReqRes API', () => {
       expect(response.status).toBe(200);
       expect(response.data.page).toBe(1);
       expect(response.data.data.length).toBeGreaterThan(0);
+      expect(response.data.data.length).toBeLessThanOrEqual(response.data.per_page);
     });
 
     test('a page far beyond total_pages returns 200 with an empty data array', async () => {
@@ -101,6 +110,7 @@ describe('ReqRes API', () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.data.data)).toBe(true);
       expect(response.data.data).toHaveLength(0);
+      expect(response.data.page).toBe(9999);
     });
   });
 
@@ -120,6 +130,7 @@ describe('ReqRes API', () => {
       expect(validateCreateUser.errors).toBeNull();
       expect(response.data.name).toBe(newUser.name);
       expect(response.data.job).toBe(newUser.job);
+      expect(new Date(response.data.createdAt).toString()).not.toBe('Invalid Date');
     });
 
     test('still returns 201 for an empty body, without fabricating name/job', async () => {
@@ -130,6 +141,7 @@ describe('ReqRes API', () => {
       expect(response.data.createdAt).toBeDefined();
       expect(response.data.name).toBeUndefined();
       expect(response.data.job).toBeUndefined();
+      expect(new Date(response.data.createdAt).toString()).not.toBe('Invalid Date');
     });
   });
 
@@ -149,6 +161,7 @@ describe('ReqRes API', () => {
       expect(validateUpdateUser.errors).toBeNull();
       expect(response.data.name).toBe(updatedUser.name);
       expect(response.data.job).toBe(updatedUser.job);
+      expect(new Date(response.data.updatedAt).toString()).not.toBe('Invalid Date');
     });
   });
 
@@ -158,6 +171,7 @@ describe('ReqRes API', () => {
 
       expect(response.status).toBe(204);
       expect(response.data).toEqual('');
+      expect(response.headers['content-type']).toBeUndefined();
     });
   });
 
@@ -170,12 +184,16 @@ describe('ReqRes API', () => {
       const isValid = validateGetResourceList(response.data);
       expect(isValid).toBe(true);
       expect(validateGetResourceList.errors).toBeNull();
+      expect(response.data.total_pages).toBe(
+        Math.ceil(response.data.total / response.data.per_page)
+      );
     });
 
     test('returns 404 for a missing resource', async () => {
       await expect(client.get('/unknown/23')).rejects.toMatchObject({
         response: {
           status: 404,
+          data: {},
         },
       });
     });
@@ -190,6 +208,9 @@ describe('ReqRes API', () => {
       const isValid = validateGetResourceList(response.data);
       expect(isValid).toBe(true);
       expect(validateGetResourceList.errors).toBeNull();
+      expect(response.data.total_pages).toBe(
+        Math.ceil(response.data.total / response.data.per_page)
+      );
     });
 
     test('GET /products/1 returns 200 and correct data structure', async () => {
@@ -200,6 +221,7 @@ describe('ReqRes API', () => {
       const isValid = validateGetResource(response.data);
       expect(isValid).toBe(true);
       expect(validateGetResource.errors).toBeNull();
+      expect(response.data.data.color).toMatch(/^#[0-9A-Fa-f]{6}$/);
     });
   });
 
@@ -215,19 +237,16 @@ describe('ReqRes API', () => {
       const isValid = validateRegister(response.data);
       expect(isValid).toBe(true);
       expect(validateRegister.errors).toBeNull();
+      expect(response.data.token).toBe('QpwL5tke4Pnpja7X4');
     });
 
     test('fails with 400 and an error message when password is missing', async () => {
-      await expect(
-        client.post('/register', { email: 'sydney@fife' })
-      ).rejects.toMatchObject({
-        response: {
-          status: 400,
-          data: {
-            error: 'Missing password',
-          },
-        },
-      });
+      const error = await client
+        .post('/register', { email: 'sydney@fife' })
+        .catch((err) => err);
+
+      expect(error.response.status).toBe(400);
+      expect(error.response.data).toEqual({ error: 'Missing password' });
     });
   });
 
@@ -243,17 +262,16 @@ describe('ReqRes API', () => {
       const isValid = validateLogin(response.data);
       expect(isValid).toBe(true);
       expect(validateLogin.errors).toBeNull();
+      expect(response.data.token).toBe('QpwL5tke4Pnpja7X4');
     });
 
     test('fails with 400 and an error message when password is missing', async () => {
-      await expect(
-        client.post('/login', { email: 'sydney@fife' })
-      ).rejects.toMatchObject({
-        response: {
-          status: 400,
-          data: { error: 'Missing password' },
-        },
-      });
+      const error = await client
+        .post('/login', { email: 'sydney@fife' })
+        .catch((err) => err);
+
+      expect(error.response.status).toBe(400);
+      expect(error.response.data).toEqual({ error: 'Missing password' });
     });
   });
 });
